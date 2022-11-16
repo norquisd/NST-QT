@@ -1,0 +1,115 @@
+#include <Python.h>
+#include "nst.h"
+#include "ui_nst.h"
+#include <QFileDialog>
+#include <QTextStream>
+#include <iostream>
+
+
+NST::NST(QWidget *parent)
+    : QMainWindow(parent)
+    , current_index(0)
+    , ui(new Ui::NST)
+{
+    ui->setupUi(this);
+    ui->stackedWidget->setCurrentIndex(current_index);
+
+    connect(ui->UploadContentButton, SIGNAL(released()), this, SLOT(UploadButtonPressed()));
+    connect(ui->UploadStyleButton, SIGNAL(released()), this, SLOT(UploadButtonPressed()));
+    connect(ui->NextButton_0, SIGNAL(released()), this, SLOT(NextButtonPressed()));
+    connect(ui->NextButton_1, SIGNAL(released()), this, SLOT(ParseSettings()));
+}
+
+NST::~NST()
+{
+    delete ui;
+}
+
+void NST::UploadButtonPressed(){
+    QPushButton *button = (QPushButton *)sender();
+
+    QString filename = QFileDialog::getOpenFileName(this, "Upload Image", "", "Image Files (*.png *.jpg *.bmp)");
+
+    if (filename.isNull()) return;
+    QImage image;
+    bool valid = image.load(filename);
+
+    if (valid){
+        image = image.scaledToWidth(ui->ContentLabel->width());
+    }
+    else {
+        //error handle
+    }
+
+
+//     check if content or style
+    if (button->text() == ui->UploadContentButton->text()){
+        ui->ContentLabel->setPixmap(QPixmap::fromImage(image));
+        ui->ContentLabel->show();
+    }else{
+        ui->StyleLabel->setPixmap(QPixmap::fromImage(image));
+        ui->StyleLabel->show();
+    }
+}
+
+void NST::NextButtonPressed(){
+    ui->stackedWidget->setCurrentIndex(++current_index);
+}
+
+void NST::BackButtonPressed(){
+    ui->stackedWidget->setCurrentIndex(--current_index);
+}
+
+void NST::CallPython(){
+    std::string args[13] = {"nst.py", "--imsize", "512", "--content_layers", "12345", "--style_layers", "3", "--num_steps", "300", "--style_weight", "100000", "--content_weight", "1"};
+    wchar_t* _argv[13];
+       for(int i=0; i<13; i++){
+           wchar_t *arg = Py_DecodeLocale(args[i].c_str(), NULL);
+           _argv[i] = arg;
+       }
+    try{
+    Py_Initialize();
+    PySys_SetArgv(13, _argv);
+    FILE* file = fopen("D:\\Users\\quinn\\Documents\\Projects\\NST-qt\\nst.py", "r");
+    if (file == NULL){
+        qInfo("file is null");
+    }
+    else{
+        qInfo("gets here");
+        PyRun_SimpleFile(file, "D:\\Users\\quinn\\Documents\\Projects\\NST-qt\\nst.py");
+    }
+    Py_Finalize();
+    }
+   catch (std::exception &exc){
+       qInfo(exc.what());
+   }
+
+    return;
+}
+
+void NST::ParseSettings(){
+    int imsize = ui->imageSizeSpinBox->value();
+    QString content_layers = "";
+    QString style_layers = "";
+    for (int i = 1; i <=5; i++){
+        QString content_layer = "content_conv_" + QString::number(i);
+        QString style_layer = "style_conv_" + QString::number(i);
+        if (NST::findChild<QCheckBox *>(content_layer)->isChecked()){
+            content_layers += QString::number(i);
+        }
+        if (NST::findChild<QCheckBox *>(style_layer)->isChecked()){
+            style_layers += QString::number(i);
+        }
+    }
+    int iterations = ui->numberOfIterationsSpinBox->value();
+    int content_weight = ui->contentWeightSpinBox->value();
+    int style_weight = ui->styleWeightSpinBox->value();
+    QTextStream out(stdout);
+    out << "imsize: " << imsize << "\n";
+    out << "content_layers: " << content_layers << "\n";
+    out << "style_layers: " << style_layers << "\n";
+    out << "num_steps: " << iterations << "\n";
+    out << "content_weight: " << content_weight << "\n";
+    out << "style_weight: " << style_weight << "\n";
+}
+
